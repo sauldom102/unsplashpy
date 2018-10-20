@@ -1,18 +1,19 @@
-import requests, json, math, os, time
+import requests, json, math, os, time, re
 import dateutil.parser
 from collections import namedtuple
 from urllib.parse import urljoin
 from threading import Thread, Lock
 from queue import Queue
+from typing import Union
 
 def json_to_attrs(obj, json_res, types=(str, int, type(None), )):
 	for key, val in json_res.items():
 		if type(val) in types:
 			setattr(obj, key, val if type(val) is not str else val.strip())
 
-class Unsplash:
+_napiUrl = 'https://unsplash.com/napi/'
 
-	rootUrl = 'https://unsplash.com/napi/'
+class Unsplash:
 
 	def __init__(self, size_to_download='regular'):
 		self.images_count_lock = Lock()
@@ -22,7 +23,7 @@ class Unsplash:
 		self.urls = Queue()
 
 	def search(self, text, per_page=30, debug=True):
-		first_page = requests.get(urljoin(self.rootUrl, 'search/photos?query={}&xp=&per_page={}&page=1'.format(text.replace(' ', '%20'), per_page)))
+		first_page = requests.get(urljoin(_napiUrl, 'search/photos?query={}&xp=&per_page={}&page=1'.format(text.replace(' ', '%20'), per_page)))
 		
 		if first_page.ok:
 			json_res = json.loads(first_page.text)
@@ -38,7 +39,7 @@ class Unsplash:
 			self.urls = Queue(num_pages)
 
 			for i in range(1, num_pages+1):
-				self.urls.put(urljoin(self.rootUrl, 'search/photos?query={}&xp=&per_page=30&page={}'.format(self.last_search_text.replace(' ', '%20'), i)))
+				self.urls.put(urljoin(_napiUrl, 'search/photos?query={}&xp=&per_page=30&page={}'.format(self.last_search_text.replace(' ', '%20'), i)))
 
 	def _get_images(self, num_pages):	
 		for _ in range(num_pages):
@@ -86,62 +87,103 @@ class Unsplash:
 				print('Got {} images in {} seconds ({} images per second)'.format(self.images_downloaded_count, ex_time, self.images_downloaded_count/ex_time))
 
 class Photo:
-
-	rootUrl = 'https://unsplash.com/napi/'
 	
-	def __init__(self, id, json_res=None, from_user=None):
+	def __init__(self, id, _json=None, from_user=None):
 		self.id = id
-		self._json = json_res
+		self._json = _json
 		self.from_user = from_user
-		self.api_url = urljoin(self.rootUrl, 'photos/{}'.format(self.id))
+		self.api_url = urljoin(_napiUrl, 'photos/{}'.format(self.id))
 
 		if not self._json:
 			res = requests.get(self.api_url)
 			self._json = json.loads(res.text)
 
-			json_to_attrs(self, self._json)
-			
-			Urls = namedtuple('Urls', 'raw full regular small thumb')
-			self.urls = Urls(**self._json['urls'])
+		json_to_attrs(self, self._json)
+		
+		Urls = namedtuple('Urls', 'raw full regular small thumb')
+		self.urls = Urls(**self._json['urls'])
 
-			if not from_user:
-				self.from_user = User(self._json['user']['username'])
+		self.created_at = dateutil.parser.parse(self.created_at)
+		self.updated_at = dateutil.parser.parse(self.updated_at)
+
+		if 'location' in self._json:
+			Location = namedtuple('Location', 'title name city country position')
+			Position = namedtuple('Position', 'latitude longitude')
+			json_loc = dict(self._json['location'])
+			json_loc.pop('position')
+			self.location = Location(**json_loc, position=Position(**self._json['location']['position']))
+		else:
+			self.location = None
+
+		if 'exif' in self._json:
+			Exif = namedtuple('Exif', 'make model exposure_time aperture focal_length iso')
+			self.exif = Exif(**self._json['exif'])
+		else:
+			self.exif = None
+
+		if not from_user:
+			self.from_user = User(self._json['user']['username'])
+
+	@classmethod
+	def from_json(cls, json_file):
+		with open(json_file) as f:
+			_json = json.loads(f.read())
+			photo = cls(_json['id'], _json=_json)
+			return photo
+
+	def save_json_data(self, location=None):
+		if not location:
+			with open('photo-info-{}.json'.format(self.id), 'w') as f:
+				f.write(json.dumps(self._json, indent=4))
 
 	def download(self, size='regular', download_location=None):
 		dwld_url = self.urls._asdict()[size]
 		photo_content = requests.get(dwld_url).content
+		location_and_name = '{}-{}'.format(self.id, size) if not download_location else download_location
 
-		with open('{}-{}'.format(self.id, size) if not download_location else download_location, 'wb') as photo:
-			photo.write(photo_content)
+		if not os.path.exists(location_and_name):
+			with open(location_and_name, 'wb') as photo:
+				photo.write(photo_content)
 
 class User:
-
-	rootUrl = 'https://unsplash.com/napi/'
 
 	def __init__(self, username, get_total_info=True):
 		super().__init__()
 		self.id = None
 		self.username = username
-		self.api_url = urljoin(self.rootUrl, 'users/{}'.format(self.username))
+		self.api_url = urljoin(_napiUrl, 'users/{}'.format(self.username))
 
 		if get_total_info:
 			res = requests.get(self.api_url).text
-			json_res = json.loads(res)
+			self._json = json.loads(res)
 
-			json_to_attrs(self, json_res)
+			json_to_attrs(self, self._json)
 
 			self.updated_at = dateutil.parser.parse(self.updated_at)
-			self.interests = list(map(lambda t: t['title'], json_res['tags']['custom']))
-			self.aggregated_tags = list(map(lambda t: t['title'], json_res['tags']['aggregated']))
+			self.interests = list(map(lambda t: t['title'], self._json['tags']['custom']))
+			self.aggregated_tags = list(map(lambda t: t['title'], self._json['tags']['aggregated']))	
+	
+	def profile_image(self, size: Union['small', 'medium', 'large']='medium', w=None, h=None):
+		ProfileImage = namedtuple('ProfileImage', 'small medium large')
+		profile_img_urls = ProfileImage(**self._json['profile_image'])
 
-			ProfileImage = namedtuple('ProfileImage', 'small medium large')
-			self.profile_image = ProfileImage(**json_res['profile_image'])
+		if size in profile_img_urls._asdict():
+			if not w and not h:
+				return profile_img_urls._asdict()[size]
+			elif w and h:
+				p = re.compile(r'h=\d+&w=\d+')
+				return p.sub('h={}&w={}'.format(h, w), profile_img_urls.small)
+			else:
+				# You must provide both w and h
+				raise NotImplementedError('If you want a custom image dimension you must provide both w and h')
+		else:
+			raise NotImplementedError('The size provided is not valid. Try using "small", "medium" or "large"')
 
 	@property
 	def photos(self):
 		total_pages = math.ceil(self.total_photos / 20)
 		for pnum in range(1, total_pages + 1):
-			res = requests.get(urljoin(self.rootUrl, 'users/{}/photos?page={}&per_page=20&order_by=latest'.format(self.username, pnum)))
+			res = requests.get(urljoin(_napiUrl, 'users/{}/photos?page={}&per_page=20&order_by=latest'.format(self.username, pnum)))
 			res_json = json.loads(res.text)
 			for p in res_json:
 				yield p
