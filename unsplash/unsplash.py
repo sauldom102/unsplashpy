@@ -1,5 +1,7 @@
 import requests, json, math, os, time
 import dateutil.parser
+from collections import namedtuple
+from urllib.parse import urljoin
 from threading import Thread, Lock
 from queue import Queue
 
@@ -15,7 +17,7 @@ class Unsplash:
 		self.urls = Queue()
 
 	def search(self, text, per_page=30, debug=True):
-		first_page = requests.get('{}search/photos?query={}&xp=&per_page={}&page=1'.format(self.rootUrl, text.replace(' ', '%20'), per_page))
+		first_page = requests.get(urljoin(self.rootUrl, 'search/photos?query={}&xp=&per_page={}&page=1'.format(text.replace(' ', '%20'), per_page)))
 		
 		if first_page.ok:
 			json_res = json.loads(first_page.text)
@@ -31,12 +33,11 @@ class Unsplash:
 			self.urls = Queue(num_pages)
 
 			for i in range(1, num_pages+1):
-				self.urls.put('{}search/photos?query={}&xp=&per_page=30&page={}'.format(self.rootUrl, self.last_search_text.replace(' ', '%20'), i))
+				self.urls.put(urljoin(self.rootUrl, 'search/photos?query={}&xp=&per_page=30&page={}'.format(self.last_search_text.replace(' ', '%20'), i)))
 
 	def _get_images(self, num_pages):	
 		for _ in range(num_pages):
 			url = self.urls.get()
-			print(url)
 			req = requests.get(url)
 			json_res = json.loads(req.text)
 
@@ -86,13 +87,15 @@ class Photo:
 		self._json = json
 		self.from_user = from_user
 
-class User(Unsplash):
+class User:
+
+	rootUrl = 'https://unsplash.com/napi/'
 
 	def __init__(self, username, get_total_info=True):
 		super().__init__()
 		self.id = None
 		self.username = username
-		self.api_url = '{}users/{}'.format(self.rootUrl, self.username)
+		self.api_url = urljoin(self.rootUrl, 'users/{}'.format(self.username))
 
 		if get_total_info:
 			res = requests.get(self.api_url).text
@@ -102,9 +105,18 @@ class User(Unsplash):
 				if type(val) in (str, int, type(None) ):
 					setattr(self, key, val if type(val) is not str else val.strip())
 
-			self.updated_at = dateutil.parser.parse(self.updated_at)	
+			self.updated_at = dateutil.parser.parse(self.updated_at)
+			self.interests = list(map(lambda t: t['title'], json_res['tags']['custom']))
+			self.aggregated_tags = list(map(lambda t: t['title'], json_res['tags']['aggregated']))
+
+			ProfileImage = namedtuple('ProfileImage', 'small medium large')
+			self.profile_image = ProfileImage(**json_res['profile_image'])
 
 	@property
-	def photos():
-		pass
-		# TODO: Add call to fetch all user photos	
+	def photos(self):
+		total_pages = math.ceil(self.total_photos / 20)
+		for pnum in range(1, total_pages + 1):
+			res = requests.get(urljoin(self.rootUrl, 'users/{}/photos?page={}&per_page=20&order_by=latest'.format(self.username, pnum)))
+			res_json = json.loads(res.text)
+			for p in res_json:
+				yield p
