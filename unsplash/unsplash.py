@@ -106,18 +106,5 @@ class User(Unsplash):
 
 	@property
 	def photos():
+		pass
 		# TODO: Add call to fetch all user photos	
-
-if __name__ == '__main__':
-	u = Unsplash()
-
-	search_text = input('Tell me what are you searching for: ')
-	u.search(search_text)
-
-	num_pages = input('Pages to download [5]: ')
-	num_pages = 5 if num_pages == '' else int(num_pages)
-
-	image_size = input('Image size to download (full, regular, small, thumb) [regular]: ')
-	image_size = 'regular' if image_size == '' else image_size
-
-	u.download_last_search(num_pages=num_pages, image_size=image_size)
