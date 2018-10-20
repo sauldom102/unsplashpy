@@ -1,8 +1,11 @@
 import requests, json, math, os, time
+import dateutil.parser
 from threading import Thread, Lock
 from queue import Queue
 
 class Unsplash:
+
+	rootUrl = 'https://unsplash.com/napi/'
 
 	def __init__(self, size_to_download='regular'):
 		self.images_count_lock = Lock()
@@ -12,7 +15,7 @@ class Unsplash:
 		self.urls = Queue()
 
 	def search(self, text, per_page=30, debug=True):
-		first_page = requests.get('https://unsplash.com/napi/search/photos?query={}&xp=&per_page={}&page=1'.format(text.replace(' ', '%20'), per_page))
+		first_page = requests.get('{}search/photos?query={}&xp=&per_page={}&page=1'.format(self.rootUrl, text.replace(' ', '%20'), per_page))
 		
 		if first_page.ok:
 			json_res = json.loads(first_page.text)
@@ -28,7 +31,7 @@ class Unsplash:
 			self.urls = Queue(num_pages)
 
 			for i in range(1, num_pages+1):
-				self.urls.put('https://unsplash.com/napi/search/photos?query={}&xp=&per_page=30&page={}'.format(self.last_search_text.replace(' ', '%20'), i))
+				self.urls.put('{}search/photos?query={}&xp=&per_page=30&page={}'.format(self.rootUrl, self.last_search_text.replace(' ', '%20'), i))
 
 	def _get_images(self, num_pages):	
 		for _ in range(num_pages):
@@ -75,6 +78,35 @@ class Unsplash:
 			if debug:
 				ex_time = time.time() - st
 				print('Got {} images in {} seconds ({} images per second)'.format(self.images_downloaded_count, ex_time, self.images_downloaded_count/ex_time))
+
+class Photo:
+	
+	def __init__(self, json=None, from_user=None, id=None):
+		self.id = id
+		self._json = json
+		self.from_user = from_user
+
+class User(Unsplash):
+
+	def __init__(self, username, get_total_info=True):
+		super().__init__()
+		self.id = None
+		self.username = username
+		self.api_url = '{}users/{}'.format(self.rootUrl, self.username)
+
+		if get_total_info:
+			res = requests.get(self.api_url).text
+			json_res = json.loads(res)
+
+			for key, val in json_res.items():
+				if type(val) in (str, int, type(None) ):
+					setattr(self, key, val if type(val) is not str else val.strip())
+
+			self.updated_at = dateutil.parser.parse(self.updated_at)	
+
+	@property
+	def photos():
+		# TODO: Add call to fetch all user photos	
 
 if __name__ == '__main__':
 	u = Unsplash()
