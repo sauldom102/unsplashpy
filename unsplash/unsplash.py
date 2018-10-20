@@ -5,6 +5,11 @@ from urllib.parse import urljoin
 from threading import Thread, Lock
 from queue import Queue
 
+def json_to_attrs(obj, json_res, types=(str, int, type(None), )):
+	for key, val in json_res.items():
+		if type(val) in types:
+			setattr(obj, key, val if type(val) is not str else val.strip())
+
 class Unsplash:
 
 	rootUrl = 'https://unsplash.com/napi/'
@@ -81,11 +86,33 @@ class Unsplash:
 				print('Got {} images in {} seconds ({} images per second)'.format(self.images_downloaded_count, ex_time, self.images_downloaded_count/ex_time))
 
 class Photo:
+
+	rootUrl = 'https://unsplash.com/napi/'
 	
-	def __init__(self, json=None, from_user=None, id=None):
+	def __init__(self, id, json_res=None, from_user=None):
 		self.id = id
-		self._json = json
+		self._json = json_res
 		self.from_user = from_user
+		self.api_url = urljoin(self.rootUrl, 'photos/{}'.format(self.id))
+
+		if not self._json:
+			res = requests.get(self.api_url)
+			self._json = json.loads(res.text)
+
+			json_to_attrs(self, self._json)
+			
+			Urls = namedtuple('Urls', 'raw full regular small thumb')
+			self.urls = Urls(**self._json['urls'])
+
+			if not from_user:
+				self.from_user = User(self._json['user']['username'])
+
+	def download(self, size='regular', download_location=None):
+		dwld_url = self.urls._asdict()[size]
+		photo_content = requests.get(dwld_url).content
+
+		with open('{}-{}'.format(self.id, size) if not download_location else download_location, 'wb') as photo:
+			photo.write(photo_content)
 
 class User:
 
@@ -101,9 +128,7 @@ class User:
 			res = requests.get(self.api_url).text
 			json_res = json.loads(res)
 
-			for key, val in json_res.items():
-				if type(val) in (str, int, type(None) ):
-					setattr(self, key, val if type(val) is not str else val.strip())
+			json_to_attrs(self, json_res)
 
 			self.updated_at = dateutil.parser.parse(self.updated_at)
 			self.interests = list(map(lambda t: t['title'], json_res['tags']['custom']))
