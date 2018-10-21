@@ -48,14 +48,11 @@ class Unsplash:
 			json_res = json.loads(req.text)
 
 			for res in json_res['results']:
-				image_url = res['urls'][self.size_to_download]
-				image_path = '{}/{}-{}'.format(self.last_search_text, res['id'], self.size_to_download)
+				photo = Photo.from_json(res)
+				photo.download(self.size_to_download, '{}/{}-{}'.format(self.last_search_text, res['id'], self.size_to_download))
 
-				if not os.path.exists(image_path):
-					with open(image_path, 'wb') as im:
-						im.write(requests.get(image_url).content)
-					with self.images_count_lock:
-						self.images_downloaded_count += 1
+				with self.images_count_lock:
+				 	self.images_downloaded_count += 1
 
 			self.urls.task_done()
 
@@ -104,7 +101,9 @@ class Photo:
 		self.urls = Urls(**self._json['urls'])
 
 		self.created_at = dateutil.parser.parse(self.created_at)
-		self.updated_at = dateutil.parser.parse(self.updated_at)
+
+		if hasattr(self, 'updated_at'):
+			self.updated_at = dateutil.parser.parse(self.updated_at)
 
 		if 'location' in self._json:
 			Location = namedtuple('Location', 'title name city country position')
@@ -123,13 +122,19 @@ class Photo:
 
 		if not from_user:
 			self.from_user = User(self._json['user']['username'])
+	@classmethod
+	def from_json(cls, _json):
+		return cls(_json['id'], _json=_json)
 
 	@classmethod
-	def from_json(cls, json_file):
+	def from_json_text(cls, json_text):
+		_json = json.loads(json_text)
+		return cls.from_json(_json)
+
+	@classmethod
+	def from_json_file(cls, json_file):
 		with open(json_file) as f:
-			_json = json.loads(f.read())
-			photo = cls(_json['id'], _json=_json)
-			return photo
+			return cls.from_json_text(f.read())
 
 	def save_json_data(self, location=None):
 		if not location:
@@ -159,9 +164,13 @@ class User:
 
 			json_to_attrs(self, self._json)
 
-			self.updated_at = dateutil.parser.parse(self.updated_at)
-			self.interests = list(map(lambda t: t['title'], self._json['tags']['custom']))
-			self.aggregated_tags = list(map(lambda t: t['title'], self._json['tags']['aggregated']))	
+			if hasattr(self, 'updated_at'):
+				self.updated_at = dateutil.parser.parse(self.updated_at)
+			if 'tags' in self._json:
+				if 'custom' in self._json['tags']:
+					self.interests = list(map(lambda t: t['title'], self._json['tags']['custom']))
+				if 'aggregated' in self._json['tags']:
+					self.aggregated_tags = list(map(lambda t: t['title'], self._json['tags']['aggregated']))	
 	
 	def profile_image(self, size: Union['small', 'medium', 'large']='medium', w=None, h=None):
 		ProfileImage = namedtuple('ProfileImage', 'small medium large')
@@ -174,7 +183,6 @@ class User:
 				p = re.compile(r'h=\d+&w=\d+')
 				return p.sub('h={}&w={}'.format(h, w), profile_img_urls.small)
 			else:
-				# You must provide both w and h
 				raise NotImplementedError('If you want a custom image dimension you must provide both w and h')
 		else:
 			raise NotImplementedError('The size provided is not valid. Try using "small", "medium" or "large"')
