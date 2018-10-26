@@ -15,14 +15,14 @@ _napiUrl = 'https://unsplash.com/napi/'
 
 class Unsplash:
 
-	def __init__(self, size_to_download='regular'):
+	def __init__(self, size_to_download:Union['thumb', 'small', 'regular', 'full']='regular'):
 		self.images_count_lock = Lock()
 		self.images_downloaded_count = 0
 		self.last_search_text = None
 		self.size_to_download = size_to_download
 		self.urls = Queue()
 
-	def search(self, text, per_page=30, debug=True):
+	def search(self, text:str, per_page:int=30, debug:bool=True):
 		first_page = requests.get(urljoin(_napiUrl, 'search/photos?query={}&xp=&per_page={}&page=1'.format(text.replace(' ', '%20'), per_page)))
 		
 		if first_page.ok:
@@ -34,14 +34,14 @@ class Unsplash:
 			if debug:
 				print('There are {} photos and {} pages for searching text "{}"'.format(self.last_search_total_photos, self.last_search_total_pages, text))
 
-	def _add_urls(self, num_pages=10):
+	def _add_urls(self, num_pages:int=10):
 		if self.last_search_text:
 			self.urls = Queue(num_pages)
 
 			for i in range(1, num_pages+1):
 				self.urls.put(urljoin(_napiUrl, 'search/photos?query={}&xp=&per_page=30&page={}'.format(self.last_search_text.replace(' ', '%20'), i)))
 
-	def _get_images(self, num_pages):	
+	def _get_images(self, num_pages:int):	
 		for _ in range(num_pages):
 			url = self.urls.get()
 			req = requests.get(url)
@@ -56,7 +56,7 @@ class Unsplash:
 
 			self.urls.task_done()
 
-	def download_last_search(self, num_pages=10, image_size='regular', max_num_threads=200, debug=True):
+	def download_last_search(self, num_pages:int=10, image_size: Union['thumb', 'small', 'regular', 'full']='regular', max_num_threads=200, debug=True):
 		if image_size in ('full', 'regular', 'small', 'thumb'):
 			if not os.path.exists(self.last_search_text):
 				os.mkdir(self.last_search_text)
@@ -85,10 +85,9 @@ class Unsplash:
 
 class Photo:
 	
-	def __init__(self, id, _json=None, from_user=None):
+	def __init__(self, id:str, _json:dict=None):
 		self.id = id
 		self._json = _json
-		self.from_user = from_user
 		self.api_url = urljoin(_napiUrl, 'photos/{}/info'.format(self.id))
 
 		if not self._json:
@@ -132,20 +131,24 @@ class Photo:
 		else:
 			self.exif = None
 
-		if not from_user:
-			self.from_user = User(self._json['user']['username'])
+	def from_user(self, get_total_user_info:bool=True):
+		if not hasattr(self, '_from_user'):
+			self._from_user = User(self._json['user']['username'], get_total_info=get_total_user_info)
+			return self._from_user
+		
+		return self._from_user
 
 	@classmethod
-	def from_json(cls, _json):
+	def from_json(cls, _json:dict):
 		return cls(_json['id'], _json=_json)
 
 	@classmethod
-	def from_json_text(cls, json_text):
+	def from_json_text(cls, json_text:str):
 		_json = json.loads(json_text)
 		return cls.from_json(_json)
 
 	@classmethod
-	def from_json_file(cls, json_file):
+	def from_json_file(cls, json_file:str):
 		with open(json_file) as f:
 			return cls.from_json_text(f.read())
 
@@ -154,23 +157,25 @@ class Photo:
 		req = requests.get(urljoin(_napiUrl, 'photos/random'))
 		return cls.from_json_text(req.text)
 
-	def save_json_data(self, location=None):
-		if not location:
-			with open('photo-info-{}.json'.format(self.id), 'w') as f:
-				f.write(json.dumps(self._json, indent=4))
+	def save_json_data(self, location:str=None):
+		with open(os.path.join('' if not location else location, 'photo-info-{}.json'.format(self.id)), 'w') as f:
+			f.write(json.dumps(self._json, indent=4))
 
-	def download(self, size='regular', download_location=None):
+	def download(self, size='regular', download_location:str=None):
 		dwld_url = self.urls._asdict()[size]
 		photo_content = requests.get(dwld_url).content
-		location_and_name = '{}-{}'.format(self.id, size) if not download_location else download_location
+		complete_path = os.path.join('' if not download_location else download_location, '{}-{}'.format(self.id, size))
 
-		if not os.path.exists(location_and_name):
-			with open(location_and_name, 'wb') as photo:
+		if download_location and not os.path.isdir(download_location):
+			os.mkdir(download_location)
+
+		if not os.path.exists(complete_path):
+			with open(complete_path, 'wb') as photo:
 				photo.write(photo_content)
 
 class User:
 
-	def __init__(self, username, get_total_info=True):
+	def __init__(self, username:str, get_total_info:bool=True):
 		super().__init__()
 		self.id = None
 		self.username = username
@@ -190,7 +195,7 @@ class User:
 				if 'aggregated' in self._json['tags']:
 					self.aggregated_tags = list(map(lambda t: t['title'], self._json['tags']['aggregated']))	
 	
-	def profile_image(self, size: Union['small', 'medium', 'large']='medium', w=None, h=None):
+	def profile_image(self, size: Union['small', 'medium', 'large']='medium', w:int=None, h:int=None):
 		ProfileImage = namedtuple('ProfileImage', 'small medium large')
 		profile_img_urls = ProfileImage(**self._json['profile_image'])
 
@@ -212,4 +217,4 @@ class User:
 			res = requests.get(urljoin(_napiUrl, 'users/{}/photos?page={}&per_page=20&order_by=latest'.format(self.username, pnum)))
 			res_json = json.loads(res.text)
 			for p in res_json:
-				yield p
+				yield Photo.from_json(p)
