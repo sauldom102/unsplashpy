@@ -89,13 +89,23 @@ class Photo:
 		self.id = id
 		self._json = _json
 		self.from_user = from_user
-		self.api_url = urljoin(_napiUrl, 'photos/{}'.format(self.id))
+		self.api_url = urljoin(_napiUrl, 'photos/{}/info'.format(self.id))
 
 		if not self._json:
 			res = requests.get(self.api_url)
 			self._json = json.loads(res.text)
 
 		json_to_attrs(self, self._json)
+
+		if 'tags' in self._json:
+			self.tags = list(map(lambda t: t['title'], self._json['tags']))
+		else:
+			self.tags = None
+		
+		if 'photo_tags' in self._json:
+			self.photo_tags = list(map(lambda t: t['title'], self._json['photo_tags']))
+		else:
+			self.photo_tags = None
 		
 		Urls = namedtuple('Urls', 'raw full regular small thumb')
 		self.urls = Urls(**self._json['urls'])
@@ -104,6 +114,8 @@ class Photo:
 
 		if hasattr(self, 'updated_at'):
 			self.updated_at = dateutil.parser.parse(self.updated_at)
+		else:
+			self.updated_at = None
 
 		if 'location' in self._json:
 			Location = namedtuple('Location', 'title name city country position')
@@ -122,6 +134,7 @@ class Photo:
 
 		if not from_user:
 			self.from_user = User(self._json['user']['username'])
+
 	@classmethod
 	def from_json(cls, _json):
 		return cls(_json['id'], _json=_json)
@@ -135,6 +148,11 @@ class Photo:
 	def from_json_file(cls, json_file):
 		with open(json_file) as f:
 			return cls.from_json_text(f.read())
+
+	@classmethod
+	def random(cls):
+		req = requests.get(urljoin(_napiUrl, 'photos/random'))
+		return cls.from_json_text(req.text)
 
 	def save_json_data(self, location=None):
 		if not location:
