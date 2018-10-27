@@ -179,11 +179,15 @@ class UserNotFoundException(Exception):
 
 class User:
 
-	def __init__(self, username:str, get_total_info:bool=True):
+	def __init__(self, username:str, get_total_info:bool=True, _json:dict=None):
 		super().__init__()
 		self.id = None
 		self.username = username
 		self.api_url = urljoin(_napiUrl, 'users/{}'.format(self.username))
+		self._json = _json
+
+		if _json:
+			json_to_attrs(self, _json)
 
 		if get_total_info:
 			res = requests.get(self.api_url).text
@@ -202,6 +206,10 @@ class User:
 				if 'aggregated' in self._json['tags']:
 					self.aggregated_tags = list(map(lambda t: t['title'], self._json['tags']['aggregated']))	
 	
+	@classmethod
+	def from_json(cls, _json:dict, get_total_info=True):
+		return cls(_json['username'], get_total_info=get_total_info, _json=_json)
+
 	def profile_image(self, size: Union['small', 'medium', 'large']='medium', w:int=None, h:int=None):
 		ProfileImage = namedtuple('ProfileImage', 'small medium large')
 		profile_img_urls = ProfileImage(**self._json['profile_image'])
@@ -237,3 +245,26 @@ class User:
 
 		for t in threads:
 			t.join()
+
+class Collection:
+
+	def __init__(self, id):
+		self.id = id
+		self.api_url = urljoin(_napiUrl, 'collections/{}'.format(self.id))
+
+		res = requests.get(self.api_url)
+		self._json = json.loads(res.text)
+
+		json_to_attrs(self, self._json)
+
+		if 'tags' in self._json:
+			self.tags = [t['title'] for t in self._json['tags']]
+
+		self.cover_photo = Photo.from_json(self._json['cover_photo'])
+
+	def from_user(self, get_total_info:bool=True):
+		if not hasattr(self, '_from_user'):
+			self._from_user = User.from_json(self._json['user'], get_total_info=get_total_info)
+			return self._from_user
+		
+		return self._from_user
