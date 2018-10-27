@@ -1,4 +1,4 @@
 .vscode
 tests
-unsplash/__pycache__
 unsplash-doc
+__pycache__

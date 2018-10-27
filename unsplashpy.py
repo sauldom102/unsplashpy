@@ -49,7 +49,7 @@ class Unsplash:
 
 			for res in json_res['results']:
 				photo = Photo.from_json(res)
-				photo.download(self.size_to_download, '{}/{}-{}'.format(self.last_search_text, res['id'], self.size_to_download))
+				photo.download(self.size_to_download, self.last_search_text)
 
 				with self.images_count_lock:
 				 	self.images_downloaded_count += 1
@@ -173,6 +173,10 @@ class Photo:
 			with open(complete_path, 'wb') as photo:
 				photo.write(photo_content)
 
+class UserNotFoundException(Exception):
+	"""Raised when trying to find a user who doesn't exists"""
+	pass
+
 class User:
 
 	def __init__(self, username:str, get_total_info:bool=True):
@@ -184,6 +188,9 @@ class User:
 		if get_total_info:
 			res = requests.get(self.api_url).text
 			self._json = json.loads(res)
+
+			if 'errors' in self._json:
+				raise UserNotFoundException('\n'.join(self._json['errors']))
 
 			json_to_attrs(self, self._json)
 
@@ -218,3 +225,15 @@ class User:
 			res_json = json.loads(res.text)
 			for p in res_json:
 				yield Photo.from_json(p)
+
+	def download_all_photos(self, photo_size='regular', dwnld_location=None):
+		download = lambda p: p.download(size=photo_size, download_location=self.username if not dwnld_location else dwnld_location)
+
+		threads = []
+		for p in self.photos:
+			t = Thread(target=download, args=(p, ))
+			t.start()
+			threads.append(t)
+
+		for t in threads:
+			t.join()
