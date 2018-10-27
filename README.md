@@ -7,7 +7,7 @@ A Unsplash client without the need for an api key
 You can start try out how this module works by importing the Unsplash class, which will help you with some user regular actions as searching for a keyword and then download a certain number of image pages of that results
 
 ```python
-from unsplash import Unsplash
+from unsplashpy import Unsplash
 
 u = Unsplash()
 
