@@ -40,7 +40,7 @@ username = input('Tell me a username: ')
 u = User(username)
 
 for p in u.photos:
-	p.download(download_location=username)
+    p.download(download_location=username)
 ```
 
 ### Download user's photos (multithreading way)
