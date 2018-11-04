@@ -2,11 +2,11 @@
 
 ## Description
 
-A Unsplash client without the need for an api key
+An Unsplash client without the need for an api key. For a full documentation visit <https://sauldom102.github.io/unsplashpy>.
 
 ## Getting started
 
-You can start try out how this module works by importing the Unsplash class, which will help you with some user regular actions as searching for a keyword and then download a certain number of image pages of that results
+You can start try out how this module works by importing the Unsplash class, which will help you with some user regular actions as searching for a keyword and then download a certain number of image pages of that results.
 
 ```python
 from unsplashpy import Unsplash
