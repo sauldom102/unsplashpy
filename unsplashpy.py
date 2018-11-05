@@ -268,3 +268,12 @@ class Collection:
 			return self._from_user
 		
 		return self._from_user
+
+	@property
+	def photos(self):
+		total_pages = math.ceil(self.total_photos / 20)
+		for pnum in range(1, total_pages + 1):
+			res = requests.get(urljoin(_napiUrl, 'collections/{}/photos?page={}&per_page=20&order_by=latest'.format(self.id, pnum)))
+			res_json = json.loads(res.text)
+			for p in res_json:
+				yield Photo.from_json(p)

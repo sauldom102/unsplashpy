@@ -6,7 +6,7 @@ An Unsplash client without the need for an api key. For a full documentation vis
 
 ## Getting started
 
-You can start try out how this module works by importing the Unsplash class, which will help you with some user regular actions as searching for a keyword and then download a certain number of image pages of that results.
+You can try out how this module works by importing the Unsplash class, which will help you with some user regular actions as searching for a keyword and then download a certain number of image pages of that results.
 
 ```python
 from unsplashpy import Unsplash
@@ -29,7 +29,7 @@ u.download_last_search(num_pages=num_pages, image_size=image_size)
 
 ### Download user's photos
 
-The bellow code will allow you to download all the user's published photos. One difference from the "Quick start" example is that this will take much more time downloading all pictures because this part doesn't make use of multithreading. We'll see another example on how to make this way in a much more efficient way.
+The bellow code will allow you to download all the user's published photos. One difference from the "Quick start" example is that this will take much more time downloading all pictures because this part doesn't make use of multithreading. We'll see another example on how to make this in a much more efficient way.
 
 Another thing to know is that, by default, all the images downloaded will have a regular resolution.
 
