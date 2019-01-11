@@ -6,10 +6,10 @@ from urllib.parse import urljoin
 from typing import Union
 from collections import namedtuple
 
-from .users import User
+from unsplashpy.users import User
 
-from .constants import _napiUrl
-from .utils import json_to_attrs
+from unsplashpy.constants import _napiUrl
+from unsplashpy.utils import json_to_attrs
 
 class Photo:
 	

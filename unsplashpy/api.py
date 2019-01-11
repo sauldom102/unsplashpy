@@ -4,9 +4,9 @@ from threading import Thread, Lock
 from queue import Queue
 from typing import Union
 
-from .constants import _napiUrl
+from unsplashpy.constants import _napiUrl
 
-from .photos import Photo
+from unsplashpy.photos import Photo
 
 class Unsplash:
 
