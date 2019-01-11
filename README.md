@@ -1,4 +1,4 @@
-# Unsplashpy
+# unsplashpy
 
 ## Description
 

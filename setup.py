@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="unsplashpy",
-    version="0.0.2",
+    version="1.0",
     author="Saul Dominguez",
     author_email="saulydominguez@gmail.com",
     description="A Unsplash client without the need for an api key",
